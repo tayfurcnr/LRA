@@ -1,0 +1,8 @@
+pipe_lra_studio/dist/
+*.exe
+build/
+__pycache__/
+*.pyc
+*.exe
+dist/
+build/
