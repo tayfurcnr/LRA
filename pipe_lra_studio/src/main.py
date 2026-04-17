@@ -1,5 +1,6 @@
 import sys
 import os
+import tempfile
 import numpy as np
 import csv
 
@@ -717,7 +718,7 @@ class MainWindow(QMainWindow):
 
     def _generate_report(self):
         if not self.lra_data: return
-        tmp_img = "/tmp/report_v27.png"
+        tmp_img = os.path.join(tempfile.gettempdir(), "report_v27.png")
         self.viewer.take_screenshot(tmp_img)
         p_info = {'part_no': self.in_part.text(), 'customer': self.in_cust.text(), 'revision': self.in_rev.text(),
                   'od': self.spin_od.value(), 'username': os.getlogin(), 'total_length': self.total_length, 'material': self.in_mat.text()}
