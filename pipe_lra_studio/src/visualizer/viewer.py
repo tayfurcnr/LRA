@@ -5,6 +5,63 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QF
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtkmodules.vtkRenderingOpenGL2
 
+class SolidWorksInteractorStyle(vtk.vtkInteractorStyleTrackballCamera):
+    def __init__(self, renderer, render_window, parent=None):
+        super().__init__()
+        self._renderer = renderer
+        self._render_window = render_window
+        self.SetMotionFactor(6.0)
+        self.SetDefaultRenderer(renderer)
+
+        self.AddObserver("MiddleButtonPressEvent", self._on_middle_button_press)
+        self.AddObserver("MiddleButtonReleaseEvent", self._on_middle_button_release)
+        self.AddObserver("RightButtonPressEvent", self._on_right_button_press)
+        self.AddObserver("RightButtonReleaseEvent", self._on_right_button_release)
+        self.AddObserver("MouseWheelForwardEvent", self._on_mouse_wheel_forward)
+        self.AddObserver("MouseWheelBackwardEvent", self._on_mouse_wheel_backward)
+
+    def _on_middle_button_press(self, obj, event):
+        interactor = self.GetInteractor()
+        self.FindPokedRenderer(interactor.GetEventPosition()[0], interactor.GetEventPosition()[1])
+        if interactor.GetShiftKey():
+            self.StartPan()
+        else:
+            self.StartRotate()
+
+    def _on_middle_button_release(self, obj, event):
+        state = self.GetState()
+        if state == vtk.VTKIS_PAN:
+            self.EndPan()
+        elif state == vtk.VTKIS_ROTATE:
+            self.EndRotate()
+
+    def _on_right_button_press(self, obj, event):
+        interactor = self.GetInteractor()
+        self.FindPokedRenderer(interactor.GetEventPosition()[0], interactor.GetEventPosition()[1])
+        self.StartDolly()
+
+    def _on_right_button_release(self, obj, event):
+        if self.GetState() == vtk.VTKIS_DOLLY:
+            self.EndDolly()
+
+    def _on_mouse_wheel_forward(self, obj, event):
+        self._dolly(1.15)
+
+    def _on_mouse_wheel_backward(self, obj, event):
+        self._dolly(0.87)
+
+    def _dolly(self, factor):
+        renderer = self.GetCurrentRenderer() or self._renderer
+        if not renderer:
+            return
+        camera = renderer.GetActiveCamera()
+        if camera.GetParallelProjection():
+            camera.SetParallelScale(camera.GetParallelScale() / factor)
+        else:
+            camera.Dolly(factor)
+            renderer.ResetCameraClippingRange()
+        self._render_window.Render()
+
 class PipeViewer(QWidget):
     """
     Geometrik Doğrulama ve Dondurulmuş Çerçeve (v17) motoru.
@@ -17,29 +74,34 @@ class PipeViewer(QWidget):
         super().__init__(parent)
         self.tube_radius = 20.0
         self.ovality_factor = 0.08
-        self.ring_sides = 96 # Ekstra pürüzsüz loft
-        self.sample_step = 2.0
+        self.ring_sides = 28
+        self.animation_ring_sides = 28
+        self.sample_step = 3.5
+        self._animating = False
 
         # Dondurulmuş Geometri Verileri
         self._full_path = None
         self._full_normals = None
         self._full_binormals = None
         self._full_deform = None
-        self._milestones = [] 
+        self._milestones = []
+        self._progress_markers = []
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0); self.layout.setSpacing(0)
         self._setup_camera_toolbar(self.layout)
 
         self.vtk_widget = QVTKRenderWindowInteractor(self)
-        self.layout.addWidget(self.vtk_widget)
+        self.layout.addWidget(self.vtk_widget, 1)
 
         self.renderer = vtk.vtkRenderer()
-        self.renderer.SetBackground(0.12, 0.12, 0.18)
-        self.renderer.SetBackground2(0.25, 0.25, 0.35)
+        self.renderer.SetBackground(0.04, 0.04, 0.06)
+        self.renderer.SetBackground2(0.1, 0.1, 0.15)
         self.renderer.GradientBackgroundOn()
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
-        self.vtk_widget.GetRenderWindow().SetMultiSamples(8)
+        self.vtk_widget.GetRenderWindow().SetMultiSamples(0)
+        self.interactor_style = SolidWorksInteractorStyle(self.renderer, self.vtk_widget.GetRenderWindow())
+        self.vtk_widget.SetInteractorStyle(self.interactor_style)
 
         axes = vtk.vtkAxesActor()
         self.axes_widget = vtk.vtkOrientationMarkerWidget()
@@ -50,24 +112,23 @@ class PipeViewer(QWidget):
         self.vtk_widget.Initialize(); self.vtk_widget.Start()
 
     def _setup_camera_toolbar(self, parent_layout):
-        container = QWidget(); container.setStyleSheet("background-color: #f5f5f7; border-bottom: 1px solid #dce0e8;")
+        container = QWidget(); container.setStyleSheet("background-color: #1e1e2e; border: 1px solid #313244; border-radius: 8px;")
         layout = QHBoxLayout(container); layout.setContentsMargins(10, 5, 10, 5); layout.setSpacing(8)
         
         # Camera Views
-        views = [("Isometric", self.set_view_iso), ("Front", self.set_view_front), ("Top", self.set_view_top), 
-                 ("Side", self.set_view_right)]
+        views = [("Iso", self.set_view_iso), ("Front", self.set_view_front), ("Top", self.set_view_top), ("Side", self.set_view_right)]
         for name, cb in views:
-            btn = QPushButton(name); btn.setMinimumWidth(80)
-            btn.setStyleSheet("background-color: #ffffff; border: 1px solid #dce0e8; padding: 6px; font-size: 11px; border-radius: 6px;")
+            btn = QPushButton(name); btn.setMinimumWidth(60)
+            btn.setStyleSheet("QPushButton { background-color: #313244; border: 1px solid #45475a; padding: 6px; font-size: 11px; font-weight: bold; border-radius: 6px; color: #cdd6f4; } QPushButton:hover { background-color: #45475a; border-color: #89b4fa; }")
             btn.clicked.connect(cb); layout.addWidget(btn)
         
-        layout.addSpacing(15); separator = QFrame(); separator.setFrameShape(QFrame.VLine); separator.setStyleSheet("color: #dce0e8;"); layout.addWidget(separator); layout.addSpacing(15)
+        layout.addSpacing(15); separator = QFrame(); separator.setFrameShape(QFrame.VLine); separator.setStyleSheet("color: #45475a;"); layout.addWidget(separator); layout.addSpacing(15)
 
         # Zoom Controls
-        zooms = [("+", self.zoom_in), ("-", self.zoom_out), ("Fit Window", self.zoom_fit)]
+        zooms = [("Zoom +", self.zoom_in), ("Zoom -", self.zoom_out), ("Fit", self.zoom_fit)]
         for name, cb in zooms:
-            btn = QPushButton(name); btn.setMinimumWidth(40 if "🎯" not in name else 70)
-            btn.setStyleSheet("background-color: #ffffff; border: 1px solid #dce0e8; padding: 6px; font-weight: bold; border-radius: 6px;")
+            btn = QPushButton(name); btn.setMinimumWidth(50)
+            btn.setStyleSheet("QPushButton { background-color: #313244; border: 1px solid #45475a; padding: 6px; font-weight: bold; border-radius: 6px; color: #cdd6f4; } QPushButton:hover { background-color: #45475a; border-color: #a6e3a1; color: white; }")
             btn.clicked.connect(cb); layout.addWidget(btn)
             
         layout.addStretch(); parent_layout.addWidget(container)
@@ -95,6 +156,9 @@ class PipeViewer(QWidget):
 
     def set_tube_properties(self, od):
         self.tube_radius = float(od) / 2.0
+
+    def set_animation_mode(self, active):
+        self._animating = bool(active)
 
     def calculate_full_geometry(self, points, clr_list=None):
         """Tüm geometriyi bir kez hesaplar. Tanjant çakışmalarını orantılı ölçekler."""
@@ -164,12 +228,19 @@ class PipeViewer(QWidget):
                 # Arc
                 ang_in = np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
                 bend_ang = np.pi - ang_in
-                rad = t_dist / np.tan(ang_in/2.0)
-                center = pts[i] + ((v1_u+v2_u)/np.linalg.norm(v1_u+v2_u)) * (rad/np.cos(ang_in/2.0))
+                bend_radius = t_dist / np.tan(bend_ang / 2.0)
+                bisector = v1_u + v2_u
+                bisector_norm = np.linalg.norm(bisector)
+                if bisector_norm < 1e-9:
+                    add_subdivided(path_list[-1] if path_list else pts[0], pts[i])
+                    milestones.append(len(path_list)-1); milestones.append(len(path_list)-1)
+                    continue
+                center_dist = bend_radius / np.sin(ang_in / 2.0)
+                center = pts[i] + (bisector / bisector_norm) * center_dist
                 r_in, r_out = p_en-center, p_ex-center
                 axis = np.cross(r_in, r_out); axis /= np.linalg.norm(axis)
                 w = np.cross(axis, r_in)
-                arc_steps = max(16, int(np.ceil(abs(bend_ang*rad)/self.sample_step)))
+                arc_steps = max(16, int(np.ceil(abs(bend_ang * bend_radius) / self.sample_step)))
                 for j in range(1, arc_steps+1):
                     phi = (j/arc_steps)*bend_ang
                     path_list.append(center + r_in*np.cos(phi) + w*np.sin(phi))
@@ -181,7 +252,7 @@ class PipeViewer(QWidget):
                 add_subdivided(path_list[-1] if path_list else pts[0], pts[i])
                 milestones.append(len(path_list)-1); milestones.append(len(path_list)-1)
         
-        add_subdivided(path_list[-1], pts[-1]); milestones.append(len(path_list)-1)
+        add_subdivided(path_list[-1] if path_list else pts[0], pts[-1]); milestones.append(len(path_list)-1)
         
         path = np.array(path_list); deform = np.array(def_list)
         n_pts = len(path)
@@ -216,15 +287,31 @@ class PipeViewer(QWidget):
 
         self._full_path = path; self._full_normals = normals; self._full_binormals = binormals
         self._full_deform = deform; self._milestones = milestones
+        if len(path) > 1:
+            self._progress_markers = [m / (len(path) - 1) for m in milestones]
+        else:
+            self._progress_markers = [0.0]
         self.show_slice(len(path))
         self.set_view_iso() # Varsayılan olarak izometrikten aç ve ortala
 
+    def show_progress(self, progress):
+        if self._full_path is None or len(self._full_path) < 2:
+            return
+        clamped = max(0.0, min(float(progress), 1.0))
+        max_idx = len(self._full_path) - 1
+        end_pos = max(1.0, clamped * max_idx)
+        self.show_slice(end_pos + 1.0)
+
     def show_slice(self, end_idx):
         if self._full_path is None: return
-        idx = max(2, min(int(end_idx), len(self._full_path)))
+        end_pos = max(1.0, min(float(end_idx), float(len(self._full_path))))
+        full_idx = int(np.floor(end_pos))
+        frac = end_pos - full_idx
+        idx = max(2, min(full_idx, len(self._full_path)))
         
         m_pts = vtk.vtkPoints(); m_polys = vtk.vtkCellArray()
-        theta = np.linspace(0, 2*np.pi, self.ring_sides, endpoint=False)
+        ring_sides = self.animation_ring_sides if self._animating else self.ring_sides
+        theta = np.linspace(0, 2*np.pi, ring_sides, endpoint=False)
         
         for i in range(idx):
             p, n_v, b_v, d_v = self._full_path[i], self._full_normals[i], self._full_binormals[i], self._full_deform[i]
@@ -232,20 +319,52 @@ class PipeViewer(QWidget):
             for ang in theta:
                 m_pts.InsertNextPoint(p + self.tube_radius * (f_n*np.cos(ang)*n_v + f_b*np.sin(ang)*b_v))
             if i > 0:
-                r0, r1 = (i-1)*self.ring_sides, i*self.ring_sides
-                for s in range(self.ring_sides):
-                    s_next = (s + 1) % self.ring_sides
+                r0, r1 = (i-1)*ring_sides, i*ring_sides
+                for s in range(ring_sides):
+                    s_next = (s + 1) % ring_sides
                     poly = vtk.vtkQuad()
                     poly.GetPointIds().SetId(0, r0+s); poly.GetPointIds().SetId(1, r1+s)
                     poly.GetPointIds().SetId(2, r1+s_next); poly.GetPointIds().SetId(3, r0+s_next)
                     m_polys.InsertNextCell(poly)
 
+        if frac > 1e-6 and idx < len(self._full_path):
+            p0, p1 = self._full_path[idx-1], self._full_path[idx]
+            n0, n1 = self._full_normals[idx-1], self._full_normals[idx]
+            b0, b1 = self._full_binormals[idx-1], self._full_binormals[idx]
+            d0, d1 = self._full_deform[idx-1], self._full_deform[idx]
+
+            p = p0 + (p1 - p0) * frac
+            n_v = n0 + (n1 - n0) * frac
+            b_v = b0 + (b1 - b0) * frac
+            d_v = d0 + (d1 - d0) * frac
+
+            n_norm = np.linalg.norm(n_v)
+            b_norm = np.linalg.norm(b_v)
+            if n_norm > 1e-9:
+                n_v = n_v / n_norm
+            if b_norm > 1e-9:
+                b_v = b_v / b_norm
+
+            f_n, f_b = 1.0 + (self.ovality_factor*0.5*d_v), 1.0 - (self.ovality_factor*d_v)
+            for ang in theta:
+                m_pts.InsertNextPoint(p + self.tube_radius * (f_n*np.cos(ang)*n_v + f_b*np.sin(ang)*b_v))
+
+            r0 = (idx - 1) * ring_sides
+            r1 = idx * ring_sides
+            for s in range(ring_sides):
+                s_next = (s + 1) % ring_sides
+                poly = vtk.vtkQuad()
+                poly.GetPointIds().SetId(0, r0+s); poly.GetPointIds().SetId(1, r1+s)
+                poly.GetPointIds().SetId(2, r1+s_next); poly.GetPointIds().SetId(3, r0+s_next)
+                m_polys.InsertNextCell(poly)
+            idx += 1
+
         # Caps
         for r_idx, rev in [(0, False), (idx-1, True)]:
-            cap = vtk.vtkPolygon(); cap.GetPointIds().SetNumberOfIds(self.ring_sides)
-            base = r_idx * self.ring_sides
-            for s in range(self.ring_sides):
-                cap.GetPointIds().SetId(s, base + (self.ring_sides-1-s if rev else s))
+            cap = vtk.vtkPolygon(); cap.GetPointIds().SetNumberOfIds(ring_sides)
+            base = r_idx * ring_sides
+            for s in range(ring_sides):
+                cap.GetPointIds().SetId(s, base + (ring_sides-1-s if rev else s))
             m_polys.InsertNextCell(cap)
 
         pd = vtk.vtkPolyData(); pd.SetPoints(m_pts); pd.SetPolys(m_polys)
@@ -253,8 +372,8 @@ class PipeViewer(QWidget):
         
         mapper = vtk.vtkPolyDataMapper(); mapper.SetInputData(normals.GetOutput())
         actor = vtk.vtkActor(); actor.SetMapper(mapper)
-        pr = actor.GetProperty(); pr.SetColor(0.85, 0.85, 0.9); pr.SetInterpolationToPhong()
-        pr.SetSpecular(0.6); pr.SetSpecularPower(60); pr.SetAmbient(0.15); pr.SetDiffuse(0.85)
+        pr = actor.GetProperty(); pr.SetColor(0.65, 0.7, 0.75); pr.SetInterpolationToPhong()
+        pr.SetSpecular(0.15); pr.SetSpecularPower(12); pr.SetAmbient(0.32); pr.SetDiffuse(0.68)
         
         if self._tube_actor: self.renderer.RemoveActor(self._tube_actor)
         self._tube_actor = actor; self.renderer.AddActor(actor)

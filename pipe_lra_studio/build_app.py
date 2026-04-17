@@ -1,34 +1,19 @@
 import os
-import sys
 import subprocess
 
 def build():
-    # Ensure dependencies are installed
-    # pip install pyinstaller
-    
-    app_name = "PipeLRAStudio"
-    entry_point = "src/main.py"
-    
-    # PyInstaller Command
-    # --noconsole: Don't show terminal window
-    # --onefile: Pack everything into one .exe (can be slow to start, --onedir is faster but messy)
-    # --collect-all: Ensure all shared libraries for complex packages are included
-    
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    spec_path = os.path.join(repo_root, "PipeLRAStudio.spec")
+
     cmd = [
         "pyinstaller",
-        "--noconsole",
-        "--name", app_name,
-        "--collect-all", "vtk",
-        "--collect-all", "PySide6",
-        "--hidden-import", "fpdf2",
-        "--hidden-import", "numpy",
         "--clean",
-        entry_point
+        spec_path,
     ]
     
-    print(f"Starting build for {app_name}...")
+    print("Starting build for PipeLRAStudio...")
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, cwd=repo_root)
         print("\n" + "="*50)
         print(f"BUILD SUCCESSFUL!")
         print(f"Executable can be found in the 'dist' folder.")

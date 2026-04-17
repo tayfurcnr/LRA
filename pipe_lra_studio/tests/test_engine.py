@@ -10,9 +10,11 @@ def test_lra_90_degree_bend():
         [100, 0, 0],
         [100, 100, 0]
     ]
-    results = BendingEngine.calculate_lra(points)
+    results, warnings, total_length = BendingEngine.calculate_lra(points)
     
     assert len(results) == 2, f"Beklenen 2 segment, gelen {len(results)}"
+    assert warnings == []
+    assert np.isclose(total_length, 200.0)
     assert np.isclose(results[0]['L'], 100.0), f"L={results[0]['L']}"
     assert np.isclose(results[0]['A'], 90.0), f"A={results[0]['A']}"
     assert np.isclose(results[1]['L'], 100.0), f"L={results[1]['L']}"
@@ -29,13 +31,16 @@ def test_lra_3d_rotation():
         [100, 100, 0],
         [100, 100, 100]
     ]
-    results = BendingEngine.calculate_lra(points)
+    results, warnings, total_length = BendingEngine.calculate_lra(points)
     
     assert len(results) == 3, f"Beklenen 3 segment, gelen {len(results)}"
-    # İlk büküm rotasyonu her zaman 0'dır (referans düzlem)
-    assert np.isclose(results[1]['R'], 0.0)
-    # İkinci büküm (index 2) rotasyon içermeli (düzlem değişimi var)
-    assert not np.isclose(results[2]['R'], 0.0), f"Rotasyon 0 olmamalı, gelen: {results[2]['R']}"
+    assert warnings == []
+    assert np.isclose(total_length, 300.0)
+    # İlk segmentin bend rotasyonu referans düzlem olduğu için 0'dır.
+    assert np.isclose(results[0]['R'], 0.0)
+    # İkinci bend düzlem değişimi içerdiği için rotasyon sıfır olmamalıdır.
+    assert not np.isclose(results[1]['R'], 0.0), f"Rotasyon 0 olmamalı, gelen: {results[1]['R']}"
+    assert np.isclose(results[2]['R'], 0.0)
     print("✅ 3B Rotasyon Testi Geçti!")
     for i, r in enumerate(results):
         print(f"   Segment {i+1}: L={r['L']:.2f}, R={r['R']:.2f}, A={r['A']:.2f}")
@@ -47,8 +52,10 @@ def test_straight_line():
         [100, 0, 0],
         [200, 0, 0]
     ]
-    results = BendingEngine.calculate_lra(points)
+    results, warnings, total_length = BendingEngine.calculate_lra(points)
     assert len(results) == 2
+    assert warnings == []
+    assert np.isclose(total_length, 200.0)
     assert np.isclose(results[0]['A'], 0.0), "Doğrusal noktada açı 0 olmalı"
     print("✅ Düz Hat Testi Geçti!")
 
