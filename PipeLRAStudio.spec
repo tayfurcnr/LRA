@@ -9,7 +9,7 @@ block_cipher = None
 
 a = Analysis(
     ['pipe_lra_studio/src/main.py'],
-    pathex=[],
+    pathex=['pipe_lra_studio/src'],
     binaries=binaries_vtk + binaries_pyside,
     datas=datas_vtk + datas_pyside,
     hiddenimports=hiddenimports_vtk + hiddenimports_pyside + ['fpdf2', 'numpy'],
