@@ -1,5 +1,5 @@
 import numpy as np
-import pyvista as pv
+
 import vtk
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFrame
 from vtkmodules.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
