@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QMessageBox, QHeaderView, QGroupBox, QMenu,
                              QFrame, QStatusBar, QAbstractItemView, QDoubleSpinBox,
                              QLineEdit, QFormLayout, QSlider, QSizePolicy, QStyledItemDelegate,
-                             QGridLayout, QCheckBox)
+                             QGridLayout, QCheckBox, QBoxLayout)
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QColor, QFont, QIcon, QAction
 
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Pipe LRA Studio v2.7 - Professional Edition")
-        self.resize(1600, 1000)
+        self.resize(1360, 700)
         
         # State
         self.points = []
@@ -111,22 +111,22 @@ class MainWindow(QMainWindow):
             QSplitter::handle:hover { background-color: #89b4fa; }
 
             QGroupBox { 
-                border: 1px solid #313244; border-radius: 10px; margin-top: 22px; 
-                padding-top: 24px; padding-bottom: 10px; padding-left: 12px; padding-right: 12px;
+                border: 1px solid #313244; border-radius: 10px; margin-top: 18px; 
+                padding-top: 18px; padding-bottom: 8px; padding-left: 10px; padding-right: 10px;
                 font-weight: 800; background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #171825, stop:1 #1f1f31);
             }
             QGroupBox::title { 
                 subcontrol-origin: margin; subcontrol-position: top left; 
                 left: 14px;
                 top: -3px;
-                padding: 6px 18px;
-                min-width: 180px;
+                padding: 4px 14px;
+                min-width: 150px;
                 background: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:0, stop:0 #0f172a, stop:1 #162033);
                 color: #f8fafc;
                 border: 1px solid #334155;
                 border-bottom: 2px solid #89b4fa;
                 border-radius: 7px;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 900;
                 letter-spacing: 0.8px;
             }
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
                 spacing: 8px;
                 color: #cdd6f4;
                 font-weight: 700;
-                padding: 10px 12px;
+                padding: 8px 10px;
                 border: 1px solid #2f3340;
                 border-radius: 6px;
                 background: #15171f;
@@ -205,7 +205,7 @@ class MainWindow(QMainWindow):
             }
 
             QLineEdit, QDoubleSpinBox {
-                padding: 10px 14px; border: 1px solid #2f3340; border-radius: 6px; background: #15171f; color: #cdd6f4; font-weight: 600; font-size: 13px;
+                padding: 8px 12px; border: 1px solid #2f3340; border-radius: 6px; background: #15171f; color: #cdd6f4; font-weight: 600; font-size: 13px;
             }
             QLineEdit:focus, QDoubleSpinBox:focus { border: 1px solid #89b4fa; }
         """)
@@ -214,7 +214,7 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
         label = QLabel(label_text)
         label.setObjectName("fieldLabel")
         layout.addWidget(label)
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
     def _make_metric_card(self, value_text, caption_text):
         card = QFrame()
         card.setObjectName("metricCard")
-        card.setMinimumHeight(78)
+        card.setMinimumHeight(68)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(2)
@@ -250,13 +250,65 @@ class MainWindow(QMainWindow):
         if hasattr(self, "metric_length"):
             self.metric_length.setText(total_length)
 
+    def _rebuild_info_grid(self, columns):
+        if not hasattr(self, "info_grid"):
+            return
+        while self.info_grid.count():
+            self.info_grid.takeAt(0)
+
+        for idx, field in enumerate(self.info_field_widgets):
+            row = idx // columns
+            col = idx % columns
+            self.info_grid.addWidget(field, row, col)
+
+        for col in range(columns):
+            self.info_grid.setColumnStretch(col, 1)
+
+    def _update_responsive_layouts(self):
+        width = self.width()
+        compact = width < 1280
+        stacked = width < 1080
+
+        self.metrics_row.setDirection(QVBoxLayout.TopToBottom if stacked else QHBoxLayout.LeftToRight)
+        self.top_panels_row.setDirection(QBoxLayout.TopToBottom if stacked else QBoxLayout.LeftToRight)
+        self.tech_h.setDirection(QVBoxLayout.TopToBottom if stacked else QHBoxLayout.LeftToRight)
+        self.tech_h.setStretch(0, 0)
+        self.tech_h.setStretch(1, 0)
+        self.tech_h.setStretch(2, 1 if not stacked else 0)
+        self.tech_h.setStretch(3, 0)
+
+        self._rebuild_info_grid(1 if stacked else 2)
+
+        if stacked:
+            self.main_splitter.setOrientation(Qt.Vertical)
+            self.main_splitter.setSizes([620, 520])
+            self.left_widget.setMinimumWidth(0)
+            self.viewer_host.setMinimumSize(260, 260)
+        else:
+            self.main_splitter.setOrientation(Qt.Horizontal)
+            self.main_splitter.setSizes([900 if compact else 1020, 520 if compact else 640])
+            self.left_widget.setMinimumWidth(560 if compact else 680)
+            self.viewer_host.setMinimumSize(300 if compact else 320, 300 if compact else 320)
+
+        self.xyz_table.setMinimumHeight(180 if compact else 220)
+        self.lra_table.setMinimumHeight(170 if compact else 200)
+        self.hero_banner.setMinimumHeight(86 if compact else 0)
+
+        # Adjust button spacing in 3D controls for compact mode
+        if hasattr(self, 'sim_ctrl'):
+            self.sim_ctrl.setSpacing(4 if compact else 6)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_responsive_layouts()
+
     def _setup_ui(self):
         central = QWidget(); self.setCentralWidget(central)
         layout = QVBoxLayout(central); layout.setContentsMargins(10, 10, 10, 10); layout.setSpacing(10)
         
-        hero_banner = QFrame()
-        hero_banner.setObjectName("heroBanner")
-        hero_layout = QVBoxLayout(hero_banner)
+        self.hero_banner = QFrame()
+        self.hero_banner.setObjectName("heroBanner")
+        hero_layout = QVBoxLayout(self.hero_banner)
         hero_layout.setContentsMargins(20, 18, 20, 18)
         hero_layout.setSpacing(4)
 
@@ -269,70 +321,72 @@ class MainWindow(QMainWindow):
 
         hero_layout.addWidget(title_label)
         hero_layout.addWidget(subtitle_label)
-        layout.addWidget(hero_banner)
+        layout.addWidget(self.hero_banner)
 
-        metrics_row = QHBoxLayout()
-        metrics_row.setSpacing(10)
+        self.metrics_row = QHBoxLayout()
+        self.metrics_row.setSpacing(10)
         points_card, self.metric_points = self._make_metric_card("0", "Loaded Points")
         segments_card, self.metric_segments = self._make_metric_card("0", "Computed Segments")
         length_card, self.metric_length = self._make_metric_card("0.0 mm", "Total Tube Length")
         for card in (points_card, segments_card, length_card):
-            metrics_row.addWidget(card, 1)
-        layout.addLayout(metrics_row)
+            self.metrics_row.addWidget(card, 1)
+        layout.addLayout(self.metrics_row)
+
+        self.top_panels_row = QHBoxLayout()
+        self.top_panels_row.setSpacing(10)
 
         # --- 1. TOP: PROJECT METADATA ---
         info_grp = QGroupBox("PROJECT METADATA")
-        info_grid = QGridLayout(info_grp); info_grid.setContentsMargins(8, 6, 8, 8); info_grid.setHorizontalSpacing(12); info_grid.setVerticalSpacing(10)
+        self.info_grid = QGridLayout(info_grp); self.info_grid.setContentsMargins(6, 4, 6, 6); self.info_grid.setHorizontalSpacing(10); self.info_grid.setVerticalSpacing(6)
         
         self.in_part = QLineEdit(); self.in_part.setPlaceholderText("Part Number")
         self.in_cust = QLineEdit(); self.in_cust.setPlaceholderText("Customer Name")
         self.in_rev = QLineEdit(); self.in_rev.setPlaceholderText("Revision")
         self.in_mat = QLineEdit(); self.in_mat.setPlaceholderText("Material")
         info_fields = [
-            ("Part Number", self.in_part, 0, 0),
-            ("Customer Name", self.in_cust, 0, 1),
-            ("Revision", self.in_rev, 1, 0),
-            ("Material", self.in_mat, 1, 1),
+            ("Part Number", self.in_part),
+            ("Customer Name", self.in_cust),
+            ("Revision", self.in_rev),
+            ("Material", self.in_mat),
         ]
-        for label, widget, row, col in info_fields:
-            info_grid.addWidget(self._make_labeled_field(label, widget), row, col)
-        info_grid.setColumnStretch(0, 1)
-        info_grid.setColumnStretch(1, 1)
-        layout.addWidget(info_grp)
+        self.info_field_widgets = [self._make_labeled_field(label, widget) for label, widget in info_fields]
+        self._rebuild_info_grid(2)
+        self.top_panels_row.addWidget(info_grp, 1)
         
         # --- 2. MIDDLE: TECHNICAL PARAMETERS ---
         tech_grp = QGroupBox("TECHNICAL PARAMETERS")
-        tech_h = QHBoxLayout(tech_grp); tech_h.setContentsMargins(8, 6, 8, 8); tech_h.setSpacing(12)
+        self.tech_h = QHBoxLayout(tech_grp); self.tech_h.setContentsMargins(6, 4, 6, 6); self.tech_h.setSpacing(10)
         
         self.spin_od = QDoubleSpinBox(); self.spin_od.setRange(1.0, 500.0); self.spin_od.setValue(40.0)
         self.spin_od.valueChanged.connect(lambda v: self.viewer.set_tube_properties(v))
         self.spin_od.setRange(1.0, 500.0)
         self.spin_od.setDecimals(2)
         self.spin_od.setButtonSymbols(QDoubleSpinBox.NoButtons)
-        self.spin_od.setMinimumWidth(140)
+        self.spin_od.setMinimumWidth(100)
         
         self.spin_clr = QDoubleSpinBox(); self.spin_clr.setRange(1.0, 1000.0); self.spin_clr.setValue(67.5)
         self.spin_clr.setDecimals(2)
         self.spin_clr.setButtonSymbols(QDoubleSpinBox.NoButtons)
-        self.spin_clr.setMinimumWidth(140)
+        self.spin_clr.setMinimumWidth(100)
         
         self.chk_reverse_rot = QCheckBox("Rotate Reverse")
         self.chk_reverse_rot.setChecked(False)
         self.chk_reverse_rot.toggled.connect(self._toggle_rotation_reverse)
-        self.chk_reverse_rot.setMinimumWidth(190)
-        tech_h.addWidget(self._make_labeled_field("Outer Diameter", self.spin_od), 0)
-        tech_h.addWidget(self._make_labeled_field("Global CLR", self.spin_clr), 0)
-        tech_h.addStretch()
-        tech_h.addWidget(self._make_labeled_field("Rotation Mode", self.chk_reverse_rot), 0)
-        layout.addWidget(tech_grp)
+        self.chk_reverse_rot.setMinimumWidth(150)
+        self.tech_h.addWidget(self._make_labeled_field("Outer Diameter", self.spin_od), 0)
+        self.tech_h.addWidget(self._make_labeled_field("Global CLR", self.spin_clr), 0)
+        self.tech_h.addStretch()
+        self.tech_h.addWidget(self._make_labeled_field("Rotation Mode", self.chk_reverse_rot), 0)
+        self.top_panels_row.addWidget(tech_grp, 1)
+        layout.addLayout(self.top_panels_row)
 
         # --- 3. BOTTOM: TIGHT SPLIT (TABLES | RENDER) ---
-        main_splitter = QSplitter(Qt.Horizontal)
-        main_splitter.setChildrenCollapsible(False)
+        self.main_splitter = QSplitter(Qt.Horizontal)
+        self.main_splitter.setChildrenCollapsible(False)
         
         # LEFT: TABLES
-        left_widget = QWidget()
-        left_v = QVBoxLayout(left_widget); left_v.setContentsMargins(0,0,0,0); left_v.setSpacing(10)
+        self.left_widget = QWidget()
+        left_v = QVBoxLayout(self.left_widget); left_v.setContentsMargins(0,0,0,0); left_v.setSpacing(10)
         tabs_splitter = QSplitter(Qt.Vertical)
         tabs_splitter.setChildrenCollapsible(False)
         
@@ -351,15 +405,15 @@ class MainWindow(QMainWindow):
         xyz_header.setSectionResizeMode(2, QHeaderView.Stretch)
         xyz_header.setSectionResizeMode(3, QHeaderView.Stretch)
         xyz_header.setStretchLastSection(True)
-        xyz_header.setMinimumSectionSize(110)
-        xyz_header.setDefaultSectionSize(150)
-        self.xyz_table.setColumnWidth(0, 65)
-        self.xyz_table.setColumnWidth(1, 150)
-        self.xyz_table.setColumnWidth(2, 150)
-        self.xyz_table.setColumnWidth(3, 150)
+        xyz_header.setMinimumSectionSize(90)
+        xyz_header.setDefaultSectionSize(120)
+        self.xyz_table.setColumnWidth(0, 50)
+        self.xyz_table.setColumnWidth(1, 120)
+        self.xyz_table.setColumnWidth(2, 120)
+        self.xyz_table.setColumnWidth(3, 120)
         self.xyz_table.verticalHeader().setVisible(False)
-        self.xyz_table.verticalHeader().setDefaultSectionSize(44)
-        self.xyz_table.setMinimumHeight(280)
+        self.xyz_table.verticalHeader().setDefaultSectionSize(36)
+        self.xyz_table.setMinimumHeight(220)
         self.xyz_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.xyz_table.customContextMenuRequested.connect(self._show_context_menu)
         self.xyz_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -399,21 +453,21 @@ class MainWindow(QMainWindow):
         lra_header.setSectionResizeMode(4, QHeaderView.Stretch)
         lra_header.setSectionResizeMode(5, QHeaderView.Stretch)
         lra_header.setStretchLastSection(True)
-        lra_header.setMinimumSectionSize(96)
-        lra_header.setDefaultSectionSize(120)
-        self.lra_table.setColumnWidth(0, 65)
-        self.lra_table.setColumnWidth(1, 120)
-        self.lra_table.setColumnWidth(2, 110)
-        self.lra_table.setColumnWidth(3, 110)
-        self.lra_table.setColumnWidth(4, 110)
-        self.lra_table.setColumnWidth(5, 110)
+        lra_header.setMinimumSectionSize(80)
+        lra_header.setDefaultSectionSize(100)
+        self.lra_table.setColumnWidth(0, 50)
+        self.lra_table.setColumnWidth(1, 100)
+        self.lra_table.setColumnWidth(2, 90)
+        self.lra_table.setColumnWidth(3, 90)
+        self.lra_table.setColumnWidth(4, 90)
+        self.lra_table.setColumnWidth(5, 90)
         self.lra_table.verticalHeader().setVisible(False)
-        self.lra_table.verticalHeader().setDefaultSectionSize(44)
+        self.lra_table.verticalHeader().setDefaultSectionSize(36)
         self.lra_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.lra_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.lra_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.lra_table.setItemDelegate(FullCellEditorDelegate(self.lra_table))
-        self.lra_table.setMinimumHeight(250)
+        self.lra_table.setMinimumHeight(200)
         lra_v.addWidget(self.lra_table)
         
         action_row = QHBoxLayout(); action_row.setSpacing(10)
@@ -431,9 +485,9 @@ class MainWindow(QMainWindow):
         
         tabs_splitter.setStretchFactor(0, 1)
         tabs_splitter.setStretchFactor(1, 1)
-        left_widget.setMinimumWidth(760)
+        self.left_widget.setMinimumWidth(680)
         left_v.addWidget(tabs_splitter)
-        main_splitter.addWidget(left_widget)
+        self.main_splitter.addWidget(self.left_widget)
 
         # RIGHT: 3D RENDER
         viz_grp = QGroupBox("3D DIGITAL TWIN")
@@ -449,34 +503,38 @@ class MainWindow(QMainWindow):
         self.viewer_host.set_content(self.viewer)
         viz_v.addWidget(self.viewer_host, 1)
         
-        sim_ctrl = QHBoxLayout(); sim_ctrl.setSpacing(6)
+        self.sim_ctrl = QHBoxLayout(); self.sim_ctrl.setSpacing(6)
         self.btn_play = QPushButton("PLAY CNC"); self.btn_play.clicked.connect(self._anim_toggle)
-        sim_ctrl.addWidget(self.btn_play)
+        self.btn_play.setMinimumWidth(80)
+        self.sim_ctrl.addWidget(self.btn_play)
 
         self.btn_speed = QPushButton("1x")
         self.btn_speed.clicked.connect(self._cycle_anim_speed)
         self.btn_speed.setMinimumWidth(64)
-        sim_ctrl.addWidget(self.btn_speed)
+        self.sim_ctrl.addWidget(self.btn_speed)
         
         self.slider = QSlider(Qt.Horizontal)
         self.slider.setRange(0, self.ANIM_SLIDER_MAX); self.slider.setValue(0)
         self.slider.setPageStep(25); self.slider.setTracking(True)
         self.slider.setTickPosition(QSlider.NoTicks)
         self.slider.valueChanged.connect(self._slider_changed)
-        sim_ctrl.addWidget(self.slider, 1)
+        self.slider.setMinimumWidth(100)
+        self.sim_ctrl.addWidget(self.slider, 1)
         
         self.btn_stop = QPushButton("FULL RESET"); self.btn_stop.clicked.connect(self._anim_reset)
-        sim_ctrl.addWidget(self.btn_stop)
+        self.btn_stop.setMinimumWidth(80)
+        self.sim_ctrl.addWidget(self.btn_stop)
         
-        viz_v.addLayout(sim_ctrl)
-        main_splitter.addWidget(viz_grp)
+        viz_v.addLayout(self.sim_ctrl)
+        self.main_splitter.addWidget(viz_grp)
         
         # Distribute ratios: Tables larger than the 3D render area
-        main_splitter.setStretchFactor(0, 5)
-        main_splitter.setStretchFactor(1, 3)
-        main_splitter.setSizes([1020, 640])
+        self.main_splitter.setStretchFactor(0, 5)
+        self.main_splitter.setStretchFactor(1, 3)
+        self.main_splitter.setSizes([900, 560])
         
-        layout.addWidget(main_splitter, 1)
+        layout.addWidget(self.main_splitter, 1)
+        self._update_responsive_layouts()
 
     def _setup_statusbar(self):
         self.statusBar().setStyleSheet("background-color: #11111b; color: #a6adc8; font-weight: 600; padding: 4px;")
